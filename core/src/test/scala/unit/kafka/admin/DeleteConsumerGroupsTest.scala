@@ -1,19 +1,19 @@
 /**
-  * Licensed to the Apache Software Foundation (ASF) under one or more
-  * contributor license agreements.  See the NOTICE file distributed with
-  * this work for additional information regarding copyright ownership.
-  * The ASF licenses this file to You under the Apache License, Version 2.0
-  * (the "License"); you may not use this file except in compliance with
-  * the License.  You may obtain a copy of the License at
-  *
-  * http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  */
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.admin
 
 import joptsimple.OptionException
@@ -179,6 +179,37 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val result = service.deleteGroups()
     assertTrue(s"The consumer group could not be deleted as expected",
       result.size == 1 && result.keySet.contains(group) && result(group) == null)
+  }
+
+  @Test
+  def testDeleteEmptyGroupsRegex() {
+    TestUtils.createOffsetsTopic(zkClient, servers)
+
+    val groups = List("group1", "group2", "group3")
+    val executors =
+      for (group <- groups)
+        yield addConsumerGroupExecutor(numConsumers = 1, group = group)
+
+    val regex   = "group[1-2]" // select 2 groups, namely "group1" and "group2"
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--regex", regex)
+    val service = getConsumerGroupService(cgcArgs)
+
+    TestUtils.waitUntilTrue(() => {
+      groups.forall(service.listGroups().contains)
+    }, "Some groups did not initialize as expected.", maxRetries = 3)
+
+    executors.foreach(_.shutdown())
+
+    TestUtils.waitUntilTrue(() => {
+      groups.forall(group => service.collectGroupState(group).state == "Empty")
+    }, "All groups did become empty as expected.", maxRetries = 3)
+
+    val groupsExpected = groups.init
+    val groupsDeleted = service.deleteGroups()
+    assertTrue(s"Some groups could not be deleted as expected",
+        groupsDeleted.size == 2 &&
+          groupsExpected.forall(groupsDeleted.keySet.contains) &&
+          groupsDeleted.values.exists(deletionException => Option(deletionException).isEmpty))
   }
 
   @Test
