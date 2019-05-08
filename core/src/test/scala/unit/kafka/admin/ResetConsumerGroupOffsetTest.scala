@@ -323,7 +323,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
     val exportedOffsets = consumerGroupCommand.resetOffsets()
     val bw = new BufferedWriter(new FileWriter(file))
-    bw.write(consumerGroupCommand.exportOffsetsToReset(exportedOffsets))
+    bw.write(consumerGroupCommand.exportOffsetsToCsv(exportedOffsets))
     bw.close()
     assertEquals(Map(tp0 -> 2L, tp1 -> 2L), exportedOffsets.mapValues(_.offset))
 
